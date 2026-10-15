@@ -51,12 +51,28 @@
   <section class="panel" aria-label="絞り込み">
     <div class="row">
       <input type="search" id="q" placeholder="大会名・地域で検索" aria-label="大会名・地域で検索">
-      <div class="seg" role="group" aria-label="申込状況">
+      <div class="seg" role="group" aria-label="申込状況" id="regSeg">
         <button data-f="all" aria-pressed="true">すべて</button>
         <button data-f="soon" aria-pressed="false">申込前</button>
         <button data-f="open" aria-pressed="false">受付中</button>
       </div>
     </div>
+
+    <details class="evpanel" id="evPanel">
+      <summary>
+        <span class="evtitle">種目で絞り込む</span>
+        <span class="evsummary" id="evSummary">指定なし</span>
+      </summary>
+      <p class="evhelp">タップするたびに <b class="inc-t">✓ 含む</b> → <b class="exc-t">✕ 含まない</b> → 指定なし と切り替わります。</p>
+      <div class="evchips" id="evChips"></div>
+      <div class="row evopts">
+        <div class="seg" role="group" aria-label="含む種目の条件" id="evMode">
+          <button data-m="all" aria-pressed="true">✓をすべて含む</button>
+          <button data-m="any" aria-pressed="false">✓のどれかを含む</button>
+        </div>
+        <button class="btn" id="evReset">リセット</button>
+      </div>
+    </details>
   </section>
 
   <div class="status-line" id="status" role="status"></div>

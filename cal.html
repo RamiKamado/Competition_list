@@ -45,7 +45,7 @@
       <div class="name">${kind === "reg" ? "【申込開始】" : ""}${esc(c.name)}</div>
       <dl class="info"><dt>${kind === "reg" ? "日時" : "開催日"}</dt><dd>${when}</dd></dl>
       <button class="btn primary big" id="add">📅 iPhoneのカレンダーに追加</button>
-      <p class="note">追加画面で「追加」をタップすると登録されます。終わったらホーム画面のアプリに戻ってください。</p>
+      <p class="note">${kind === "reg" ? "申込開始の1時間前と10分前に通知されます。<br>" : ""}追加画面で「追加」をタップすると登録されます。終わったらホーム画面のアプリに戻ってください。</p>
     </article>`;
 
   document.getElementById("add").addEventListener("click", () => W.openIcsDirect(c, kind));
