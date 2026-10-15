@@ -30,7 +30,15 @@
     "444bf": "4x4x4 目隠し", "555bf": "5x5x5 目隠し", "333mbf": "3x3x3 複数目隠し",
     "fto": "FTO", "333ft": "3x3x3 足（廃止）", "magic": "マジック（廃止）", "mmagic": "マスターマジック（廃止）", "333mbo": "複数目隠し旧形式（廃止）"
   };
-  const EVENT_ORDER = Object.keys(EVENTS);
+  const EVENT_ORDER = ["333","222","444","555","666","777","333bf","333fm","333oh","clock","minx","pyram","skewb","sq1","444bf","555bf","333mbf","fto","333ft","magic","mmagic","333mbo"];
+  // 絞り込みに使う現行種目と短い表記
+  const EVENT_SHORT = {
+    "333": "3x3", "222": "2x2", "444": "4x4", "555": "5x5", "666": "6x6", "777": "7x7",
+    "333bf": "3BLD", "333fm": "FMC", "333oh": "OH", "clock": "Clock", "minx": "Mega", "pyram": "Pyra",
+    "skewb": "Skewb", "sq1": "SQ-1", "444bf": "4BLD", "555bf": "5BLD", "333mbf": "MBLD", "fto": "FTO"
+  };
+  // 数字だけのキーは Object.keys で昇順に並び替わるため、WCAの順序を明示する
+  const FILTER_EVENTS = ["333","222","444","555","666","777","333bf","333fm","333oh","clock","minx","pyram","skewb","sq1","444bf","555bf","333mbf","fto"];
   const OFFICIAL_ICON = new Set(["333","222","444","555","666","777","333bf","333fm","333oh","clock","minx","pyram","skewb","sq1","444bf","555bf","333mbf","333ft","333mbo","magic","mmagic"]);
   const iconClass = (id) => OFFICIAL_ICON.has(id) ? `event-${id}` : `unofficial-${id}`;
   const eventIndex = (e) => { const i = EVENT_ORDER.indexOf(e); return i < 0 ? 999 : i; };
@@ -118,8 +126,9 @@
         `SUMMARY:${icsEscape("【申込開始】" + c.name)}`,
         `URL:${url}`,
         `DESCRIPTION:${icsEscape(desc)}`,
-        "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(c.name + " の申込がまもなく始まります")}`, "TRIGGER:-PT15M", "END:VALARM",
-        "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(c.name + " の申込開始")}`, "TRIGGER:PT0M", "END:VALARM"
+        // アラーム: 申込開始の1時間前と10分前
+        "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(c.name + " の申込開始まであと1時間")}`, "TRIGGER:-PT1H", "END:VALARM",
+        "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsEscape(c.name + " の申込開始まであと10分")}`, "TRIGGER:-PT10M", "END:VALARM"
       );
     } else {
       lines.push(
@@ -172,7 +181,7 @@
 
   global.WCA = {
     WCA_BASE, ISO2, countryName, flag,
-    EVENTS, iconClass, sortEvents, eventName,
+    EVENTS, EVENT_SHORT, FILTER_EVENTS, iconClass, sortEvents, eventName,
     pad, ymd, parseYmd, fmtDate, fmtRange, fmtDateTime, TZ,
     esc, venueName, compUrl, isIOS, isStandalone,
     buildIcs, openIcsDirect, encodeComp, decodeComp

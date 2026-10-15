@@ -40,11 +40,74 @@
   });
   $("reloadBtn").addEventListener("click", () => load());
   qEl.addEventListener("input", () => render());
-  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#regSeg button").forEach(b => b.addEventListener("click", () => {
     filter = b.dataset.f;
-    document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    document.querySelectorAll("#regSeg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
     render();
   }));
+
+  // ---------- 種目フィルター ----------
+  // evState: { 種目ID: "inc"（含む） | "exc"（含まない） }、evMode: "all" | "any"
+  const EV_KEY = "wcaFinder.eventFilter";
+  let evState = {}, evMode = "all";
+  try {
+    const v = JSON.parse(localStorage.getItem(EV_KEY) || "null");
+    if (v && typeof v === "object") {
+      Object.entries(v.state || {}).forEach(([k, s]) => {
+        if (W.FILTER_EVENTS.includes(k) && (s === "inc" || s === "exc")) evState[k] = s;
+      });
+      if (v.mode === "any") evMode = "any";
+    }
+  } catch (e) {}
+  const saveEv = () => { try { localStorage.setItem(EV_KEY, JSON.stringify({ state: evState, mode: evMode })); } catch (e) {} };
+  const evOf = (s) => Object.keys(evState).filter(k => evState[k] === s);
+
+  function matchEvents(c) {
+    const ids = c.event_ids || [];
+    const inc = evOf("inc"), exc = evOf("exc");
+    if (exc.some(e => ids.includes(e))) return false;
+    if (inc.length) {
+      return evMode === "all" ? inc.every(e => ids.includes(e)) : inc.some(e => ids.includes(e));
+    }
+    return true;
+  }
+
+  function renderEvChips() {
+    // 読み込んだ大会で各種目が何件あるか
+    const counts = {};
+    competitions.forEach(c => (c.event_ids || []).forEach(e => { counts[e] = (counts[e] || 0) + 1; }));
+    $("evChips").innerHTML = W.FILTER_EVENTS.map(e => {
+      const s = evState[e] || "";
+      const n = counts[e] || 0;
+      const stateLabel = s === "inc" ? "含む" : s === "exc" ? "含まない" : "指定なし";
+      return `<button class="evchip ${s}${n ? "" : " none"}" data-e="${e}" title="${esc(W.eventName(e))}"
+        aria-label="${esc(W.eventName(e))}：${stateLabel}（${n}件）">
+        <span class="cubing-icon ${esc(W.iconClass(e))}"></span>
+        <span class="lbl">${esc(W.EVENT_SHORT[e])}</span>
+        <span class="mark">${s === "inc" ? "✓" : s === "exc" ? "✕" : (competitions.length ? n : "")}</span>
+      </button>`;
+    }).join("");
+    $("evChips").querySelectorAll(".evchip").forEach(b => b.addEventListener("click", () => {
+      const e = b.dataset.e;
+      const next = { "": "inc", inc: "exc", exc: "" }[evState[e] || ""];
+      if (next) evState[e] = next; else delete evState[e];
+      saveEv(); render();
+    }));
+
+    const inc = evOf("inc"), exc = evOf("exc");
+    const parts = [];
+    if (inc.length) parts.push(`✓ ${inc.map(e => W.EVENT_SHORT[e]).join(evMode === "all" ? "＋" : "／")}`);
+    if (exc.length) parts.push(`✕ ${exc.map(e => W.EVENT_SHORT[e]).join("・")}`);
+    $("evSummary").textContent = parts.join("　") || "指定なし";
+    $("evSummary").classList.toggle("active", parts.length > 0);
+    document.querySelectorAll("#evMode button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.m === evMode)));
+  }
+
+  document.querySelectorAll("#evMode button").forEach(b => b.addEventListener("click", () => {
+    evMode = b.dataset.m; saveEv(); render();
+  }));
+  $("evReset").addEventListener("click", () => { evState = {}; evMode = "all"; saveEv(); render(); });
+  if (Object.keys(evState).length) $("evPanel").open = true;
 
   function renderChips() {
     chips.innerHTML = countries.map(c =>
@@ -134,8 +197,10 @@
   function render() {
     const now = new Date();
     const q = qEl.value.trim().toLowerCase();
+    renderEvChips();
     const items = competitions.filter(c => {
       if (filter !== "all" && regState(c, now).key !== filter) return false;
+      if (!matchEvents(c)) return false;
       if (q) {
         const hay = [c.name, c.city, W.venueName(c.venue), countryName(c.country_iso2)].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
@@ -178,12 +243,12 @@
           <dt>URL</dt><dd class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></dd>
         </dl>
         <div class="events" aria-label="種目">
-          ${W.sortEvents(c.event_ids).map(e => `<span class="ev" title="${esc(W.eventName(e))}" aria-label="${esc(W.eventName(e))}"><span class="cubing-icon ${esc(W.iconClass(e))}"></span></span>`).join("")}
+          ${W.sortEvents(c.event_ids).map(e => `<span class="ev${evState[e] === "inc" ? " hit" : ""}" title="${esc(W.eventName(e))}" aria-label="${esc(W.eventName(e))}"><span class="cubing-icon ${esc(W.iconClass(e))}"></span></span>`).join("")}
         </div>
         <div class="actions">
           <a href="${esc(url)}" target="_blank" rel="noopener">🌐 WCAページ</a>
-          <button class="cal" data-cal="comp" data-id="${esc(c.id)}">📅 カレンダーに追加</button>
-          ${canRemindOpen ? `<button data-cal="reg" data-id="${esc(c.id)}">⏰ 申込開始を追加</button>` : ""}
+          <button class="cal" data-cal="comp" data-id="${esc(c.id)}">📅 大会日程をカレンダーに追加</button>
+          ${canRemindOpen ? `<button class="cal" data-cal="reg" data-id="${esc(c.id)}">⏰ 申込開始日時をカレンダーに追加</button>` : ""}
         </div>
       </article>`;
     }).join("");
