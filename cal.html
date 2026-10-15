@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>カレンダーに追加 | WCA大会ファインダー</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b5e3c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f2a1e" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="cal-page">
+<header class="appbar">
+  <div class="appbar-inner"><h1>カレンダーに追加</h1></div>
+</header>
+<main class="wrap" id="main">
+  <div class="empty">読み込み中…</div>
+</main>
+
+<script src="js/common.js"></script>
+<script>
+(() => {
+  "use strict";
+  const W = window.WCA, esc = W.esc;
+  const main = document.getElementById("main");
+  const params = new URLSearchParams(location.hash.slice(1));
+  const kind = params.get("k") === "reg" ? "reg" : "comp";
+  let c = null;
+  try { c = W.decodeComp(params.get("d") || ""); } catch (e) {}
+
+  if (!c || !c.id || !c.start_date) {
+    main.innerHTML = `<div class="empty">大会情報を読み取れませんでした。<br><a href="./">大会一覧へ</a></div>`;
+    return;
+  }
+
+  const when = kind === "reg"
+    ? `申込開始 ${W.fmtDateTime(new Date(c.registration_open))} <span class="tz">${esc(W.TZ)}</span>`
+    : W.fmtRange(c.start_date, c.end_date);
+
+  main.innerHTML = `
+    <article class="card">
+      <div class="where">${W.flag(c.country_iso2)} ${esc(W.countryName(c.country_iso2))} ・ ${esc(c.city || "")}</div>
+      <div class="name">${kind === "reg" ? "【申込開始】" : ""}${esc(c.name)}</div>
+      <dl class="info"><dt>${kind === "reg" ? "日時" : "開催日"}</dt><dd>${when}</dd></dl>
+      <button class="btn primary big" id="add">📅 iPhoneのカレンダーに追加</button>
+      <p class="note">追加画面で「追加」をタップすると登録されます。終わったらホーム画面のアプリに戻ってください。</p>
+    </article>`;
+
+  document.getElementById("add").addEventListener("click", () => W.openIcsDirect(c, kind));
+})();
+</script>
+</body>
+</html>

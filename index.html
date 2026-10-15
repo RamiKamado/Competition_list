@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WCA大会ファインダー</title>
+<meta name="description" content="登録した国で予定されているWCA公認大会を一覧表示し、iPhoneのカレンダーに追加できます。">
+
+<!-- PWA / ホーム画面アプリ設定 -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="WCA大会">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b5e3c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f2a1e" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+
+<link rel="stylesheet" href="https://cdn.cubing.net/v0/css/@cubing/icons/css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="appbar">
+  <div class="appbar-inner">
+    <h1>WCA大会ファインダー</h1>
+    <div class="right">
+      <span class="updated" id="updated"></span>
+      <button class="icon-btn" id="reloadBtn" aria-label="更新"><span>↻</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hint" id="installHint" hidden>
+    <p>
+      <svg class="share-glyph" viewBox="0 0 16 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 11V1.5M4.5 5 8 1.5 11.5 5"/><path d="M5 7.5H3v9h10v-9h-2"/></svg>
+      共有ボタン →「ホーム画面に追加」で、アプリのように全画面で使えます。
+    </p>
+    <button id="closeHint" aria-label="案内を閉じる">×</button>
+  </div>
+
+  <section class="panel" aria-labelledby="h-countries">
+    <h2 id="h-countries">登録している国</h2>
+    <div class="row">
+      <select id="countrySelect" aria-label="国を選んで追加"></select>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="panel" aria-label="絞り込み">
+    <div class="row">
+      <input type="search" id="q" placeholder="大会名・地域で検索" aria-label="大会名・地域で検索">
+      <div class="seg" role="group" aria-label="申込状況">
+        <button data-f="all" aria-pressed="true">すべて</button>
+        <button data-f="soon" aria-pressed="false">申込前</button>
+        <button data-f="open" aria-pressed="false">受付中</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="status-line" id="status" role="status"></div>
+  <div class="list" id="list"></div>
+
+  <footer>
+    データ: <a href="https://www.worldcubeassociation.org/" target="_blank" rel="noopener">World Cube Association</a> 公式API ／
+    種目アイコン: <a href="https://icons.cubing.net/" target="_blank" rel="noopener">cubing icons</a>
+  </footer>
+</main>
+
+<dialog id="safariDialog">
+  <h3>Safari で開いてください</h3>
+  <p>ホーム画面アプリからはカレンダーに直接追加できないため、Safari で追加用のページを開きます。</p>
+  <div class="row">
+    <a class="btn primary" id="safariLink" href="#" target="_blank" rel="noopener">開く</a>
+    <button class="btn" id="copyLink">リンクをコピー</button>
+    <button class="btn" id="closeDialog">閉じる</button>
+  </div>
+</dialog>
+
+<script src="js/common.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

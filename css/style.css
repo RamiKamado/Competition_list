@@ -1,0 +1,157 @@
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --text: #17191c;
+  --muted: #616872;
+  --border: #e1e4e8;
+  --accent: #0a7d4f;
+  --accent-soft: #e3f4ec;
+  --on-accent: #ffffff;
+  --bar: #0b5e3c;          /* 上部バー（ステータスバーの背景にもなる） */
+  --open: #0a7d4f;
+  --open-soft: #e3f4ec;
+  --soon: #a35c00;
+  --soon-soft: #fdf1df;
+  --closed: #6b7078;
+  --closed-soft: #eceef1;
+  --danger: #b3261e;
+  --radius: 14px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111315;
+    --surface: #1b1e21;
+    --surface-2: #24282c;
+    --text: #eceef0;
+    --muted: #9aa1a9;
+    --border: #2e3337;
+    --accent: #3ec58a;
+    --accent-soft: #163628;
+    --on-accent: #0d1a14;
+    --bar: #0f2a1e;
+    --open: #3ec58a;
+    --open-soft: #163628;
+    --soon: #f0b25a;
+    --soon-soft: #3a2a12;
+    --closed: #9aa1a9;
+    --closed-soft: #2a2e32;
+    --danger: #f2827a;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bar); } /* オーバースクロール時の上端の色 */
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- 上部バー（ステータスバーの下まで伸ばす） ---------- */
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bar); color: #fff;
+  padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 16px) 10px calc(env(safe-area-inset-left) + 16px);
+}
+.appbar-inner { max-width: 880px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.appbar h1 { font-size: 19px; margin: 0; letter-spacing: .02em; white-space: nowrap; }
+.appbar .right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.appbar .updated { font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%; border: 0; padding: 0;
+  background: rgba(255,255,255,.14); color: #fff; font-size: 19px; cursor: pointer;
+}
+.icon-btn:active { background: rgba(255,255,255,.26); }
+.icon-btn.spin span { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.wrap {
+  max-width: 880px; margin: 0 auto;
+  padding: 16px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 32px) calc(env(safe-area-inset-left) + 16px);
+}
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+.panel h2 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 10px; letter-spacing: .04em; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+select, input[type="search"], button { font: inherit; color: inherit; }
+select, input[type="search"] {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 10px; min-height: 42px; flex: 1 1 200px; min-width: 0;
+  font-size: 16px; /* iOS の自動ズーム防止 */
+}
+button { cursor: pointer; }
+.sub { color: var(--muted); font-size: 13px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 14px; }
+.chip button { padding: 0; width: 26px; height: 26px; border-radius: 50%; border: none; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; }
+.chip button:active { background: var(--surface-2); }
+
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+.seg button { border: none; background: transparent; min-height: 34px; padding: 4px 12px; border-radius: 8px; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+
+.status-line { color: var(--muted); font-size: 13px; margin: 4px 2px 12px; min-height: 20px; }
+.status-line.error { color: var(--danger); }
+
+.list { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.where { font-size: 13px; color: var(--muted); }
+.badge { flex: none; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
+.badge.open { color: var(--open); background: var(--open-soft); }
+.badge.soon { color: var(--soon); background: var(--soon-soft); }
+.badge.closed { color: var(--closed); background: var(--closed-soft); }
+.name { font-size: 18px; font-weight: 700; margin: 4px 0 8px; line-height: 1.35; }
+.name a { color: inherit; text-decoration: none; }
+
+dl.info { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+dl.info dt { color: var(--muted); white-space: nowrap; }
+dl.info dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.tz { color: var(--muted); font-size: 12px; }
+.url { font-size: 12px; }
+.url a { color: var(--accent); }
+
+.events { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.ev { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); font-size: 20px; }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.btn, .actions a, .actions button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; font-size: 14px;
+  border-radius: 10px; padding: 8px 12px; min-height: 40px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+.btn.primary, .actions .cal { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+
+.empty { text-align: center; color: var(--muted); padding: 32px 12px; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+footer { color: var(--muted); font-size: 12px; margin-top: 24px; text-align: center; }
+footer a { color: inherit; }
+
+/* ---------- ホーム画面に追加の案内 ---------- */
+.hint { display: flex; gap: 10px; align-items: flex-start; background: var(--accent-soft); border-radius: var(--radius); padding: 12px 12px 12px 14px; margin-bottom: 14px; font-size: 14px; }
+.hint[hidden] { display: none; }
+.hint p { margin: 0; flex: 1; }
+.hint button { border: 0; background: transparent; color: var(--muted); font-size: 18px; padding: 0 4px; }
+.share-glyph { display: inline-block; vertical-align: -3px; width: 16px; height: 18px; }
+
+/* ---------- ダイアログ ---------- */
+dialog {
+  border: 1px solid var(--border); border-radius: 18px; padding: 20px; width: min(92vw, 420px);
+  background: var(--surface); color: var(--text);
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog h3 { margin: 0 0 8px; font-size: 17px; }
+dialog p { margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+dialog .row .btn { flex: 1 1 auto; }
+
+/* ---------- cal.html ---------- */
+.cal-page .card { margin-top: 4px; }
+.cal-page .big { width: 100%; min-height: 52px; font-size: 17px; margin-top: 16px; }
+.cal-page .note { color: var(--muted); font-size: 13px; margin-top: 14px; }
