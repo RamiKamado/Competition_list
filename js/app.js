@@ -198,6 +198,7 @@
     const now = new Date();
     const q = qEl.value.trim().toLowerCase();
     renderEvChips();
+    releaseBlobUrls(); // 前回の描画で作ったカレンダー用リンクを破棄
     const items = competitions.filter(c => {
       if (filter !== "all" && regState(c, now).key !== filter) return false;
       if (!matchEvents(c)) return false;
@@ -247,24 +248,35 @@
         </div>
         <div class="actions">
           <a href="${esc(url)}" target="_blank" rel="noopener">🌐 WCAページ</a>
-          <button class="cal" data-cal="comp" data-id="${esc(c.id)}">📅 大会日程をカレンダーに追加</button>
-          ${canRemindOpen ? `<button class="cal" data-cal="reg" data-id="${esc(c.id)}">⏰ 申込開始日時をカレンダーに追加</button>` : ""}
+          ${calControl(c, "comp", "📅 大会日程をカレンダーに追加")}
+          ${canRemindOpen ? calControl(c, "reg", "⏰ 申込開始日時をカレンダーに追加") : ""}
         </div>
       </article>`;
     }).join("");
 
     list.querySelectorAll("button[data-cal]").forEach(b => b.addEventListener("click", () => {
       const c = competitions.find(x => x.id === b.dataset.id);
-      if (c) addToCalendar(c, b.dataset.cal);
+      if (c) openInSafari(c, b.dataset.cal);
     }));
   }
 
   // ---------- カレンダー ----------
-  // ホーム画面アプリ（スタンドアロン）では iOS が .ics を開けないため、
-  // Safari で cal.html を開き、そこでカレンダーに追加する。
-  function addToCalendar(c, kind) {
-    if (!(W.isIOS && W.isStandalone())) { W.openIcsDirect(c, kind); return; }
+  // Safari / PC: .ics（Blob）への本物のリンクを置き、タップでそのまま開く。
+  //   ※ iOS 26.6 以降は data: URL やスクリプトからの遷移では反応しないため。
+  // ホーム画面アプリ: iOS がアプリ内で .ics を開けないため、Safari で cal.html を開く。
+  let blobUrls = [];
+  function releaseBlobUrls() { blobUrls.forEach(u => URL.revokeObjectURL(u)); blobUrls = []; }
 
+  function calControl(c, kind, label) {
+    if (W.isIOS && W.isStandalone()) {
+      return `<button class="cal" data-cal="${kind}" data-id="${esc(c.id)}">${label}</button>`;
+    }
+    const { href, download } = W.icsLinkAttrs(c, kind);
+    blobUrls.push(href);
+    return `<a class="cal" href="${esc(href)}" download="${esc(download)}" target="_self" rel="noopener">${label}</a>`;
+  }
+
+  function openInSafari(c, kind) {
     const helper = new URL(`cal.html#k=${kind}&d=${W.encodeComp(c)}`, location.href).href;
     let left = false;
     const onHide = () => { if (document.visibilityState === "hidden") left = true; };

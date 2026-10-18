@@ -147,21 +147,17 @@
     return lines.map(fold).join("\r\n") + "\r\n";
   }
 
-  // Safari / PC ブラウザで直接 .ics を開く
-  function openIcsDirect(c, kind) {
-    const ics = buildIcs(c, kind);
-    if (isIOS) {
-      // iPhone の Safari では .ics を開くと「カレンダーに追加」画面が表示される
-      window.location.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
-      return;
-    }
-    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${c.id}${kind === "reg" ? "-registration" : ""}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  // ---------- .ics をリンクとして用意する ----------
+  // iOS 26.6 以降の Safari は data:text/calendar の URL を開かなくなったため、
+  // .ics を Blob にして「本物の <a> リンク」を用意し、ユーザーのタップで直接開かせる。
+  // （スクリプトからの location 変更や疑似クリックでは iOS が無視することがある）
+  const icsFileName = (c, kind) => `${String(c.id).replace(/[^\w-]/g, "_")}${kind === "reg" ? "-registration" : ""}.ics`;
+  function icsObjectUrl(c, kind) {
+    return URL.createObjectURL(new Blob([buildIcs(c, kind)], { type: "text/calendar;charset=utf-8" }));
+  }
+  // カレンダー追加用の <a> 属性（href は blob: URL）
+  function icsLinkAttrs(c, kind) {
+    return { href: icsObjectUrl(c, kind), download: icsFileName(c, kind) };
   }
 
   // cal.html に渡すための最小データ（URLのハッシュに入れる）
@@ -184,6 +180,6 @@
     EVENTS, EVENT_SHORT, FILTER_EVENTS, iconClass, sortEvents, eventName,
     pad, ymd, parseYmd, fmtDate, fmtRange, fmtDateTime, TZ,
     esc, venueName, compUrl, isIOS, isStandalone,
-    buildIcs, openIcsDirect, encodeComp, decodeComp
+    buildIcs, icsFileName, icsObjectUrl, icsLinkAttrs, encodeComp, decodeComp
   };
 })(window);
