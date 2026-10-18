@@ -44,11 +44,15 @@
       <div class="where">${W.flag(c.country_iso2)} ${esc(W.countryName(c.country_iso2))} ・ ${esc(c.city || "")}</div>
       <div class="name">${kind === "reg" ? "【申込開始】" : ""}${esc(c.name)}</div>
       <dl class="info"><dt>${kind === "reg" ? "日時" : "開催日"}</dt><dd>${when}</dd></dl>
-      <button class="btn primary big" id="add">📅 iPhoneのカレンダーに追加</button>
+      <a class="btn primary big" id="add" target="_self" rel="noopener">📅 iPhoneのカレンダーに追加</a>
       <p class="note">${kind === "reg" ? "申込開始の1時間前と10分前に通知されます。<br>" : ""}追加画面で「追加」をタップすると登録されます。終わったらホーム画面のアプリに戻ってください。</p>
     </article>`;
 
-  document.getElementById("add").addEventListener("click", () => W.openIcsDirect(c, kind));
+  // iOS 26.6 以降は data: URL を開かないため、Blob への本物のリンクをタップさせる
+  const link = W.icsLinkAttrs(c, kind);
+  const add = document.getElementById("add");
+  add.href = link.href;
+  add.download = link.download;
 })();
 </script>
 </body>
