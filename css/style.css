@@ -134,7 +134,29 @@ dl.info dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 footer { color: var(--muted); font-size: 12px; margin-top: 24px; text-align: center; }
 footer a { color: inherit; }
 
+.ev { position: relative; }
+.ev .rc:empty { display: none; }
+.ev .rc {
+  position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--text); color: var(--surface);
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums;
+}
 .ev.hit { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.ev.hit .rc { background: var(--accent); color: var(--on-accent); }
+.events { padding-bottom: 4px; }
+
+.btn.more { width: 100%; min-height: 46px; font-weight: 600; }
+.note-small { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.note-small[hidden] { display: none; }
+
+/* ラウンド数の指定 */
+.evrounds { margin-top: 12px; }
+.evrounds h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 6px; }
+.rrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.rrow .cubing-icon { font-size: 18px; flex: none; }
+.rrow .rname { flex: none; width: 52px; font-size: 14px; font-weight: 600; }
+.rrow select { flex: 1 1 auto; min-height: 38px; padding: 6px 8px; }
+.rhint { color: var(--muted); font-size: 12px; margin: 0; }
 
 /* ---------- 種目フィルター ---------- */
 .evpanel { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }

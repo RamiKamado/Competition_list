@@ -5,75 +5,115 @@
   const { esc, flag, countryName } = W;
 
   const API = `${W.WCA_BASE}/api/v0/competitions`;
-  const STORE_KEY = "wcaFinder.countries";
+  const STORE_KEY = "wcaFinder.countries";     // 登録した国・地域
+  const EV_KEY = "wcaFinder.eventFilter";      // 種目フィルター
+  const ROUNDS_KEY = "wcaFinder.rounds";       // ラウンド数のキャッシュ
   const HINT_KEY = "wcaFinder.installHintClosed";
+  const PAGE = 50;                             // 一度に表示する件数
 
-  // ---------- 状態 ----------
-  let countries = loadCountries();
-  let competitions = [];
-  let filter = "all";
-  let lastLoad = Date.now();
-
-  function loadCountries() {
-    try {
-      const v = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-      if (Array.isArray(v)) return v.filter(c => W.ISO2.includes(c));
-    } catch (e) {}
-    return ["JP"];
-  }
-  function saveCountries() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(countries)); } catch (e) {}
-  }
-
-  // ---------- 要素 ----------
   const $ = (id) => document.getElementById(id);
   const sel = $("countrySelect"), chips = $("chips"), list = $("list"), statusEl = $("status"), qEl = $("q");
 
+  // ---------- 状態 ----------
+  let areas = loadAreas();     // 国コード（JP など）または地域キー（WORLD / _Asia など）
+  let competitions = [];
+  let filter = "all";
+  let shownLimit = PAGE;
+  let lastLoad = Date.now();
+  let loading = false;
+
+  function loadAreas() {
+    try {
+      const v = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      if (Array.isArray(v)) return v.filter(c => W.ISO2.includes(c) || W.isRegion(c));
+    } catch (e) {}
+    return ["JP"];
+  }
+  function saveAreas() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(areas)); } catch (e) {}
+  }
+  const areaLabel = (a) => W.isRegion(a) ? `${W.regionOf(a).icon} ${W.regionLabel(a)}` : `${flag(a)} ${countryName(a)}`;
+
+  // ---------- 国・地域の選択 ----------
   const sorted = W.ISO2.map(c => ({ c, n: countryName(c) })).sort((a, b) => a.n.localeCompare(b.n, "ja"));
-  sel.innerHTML = `<option value="">国を選んで追加…</option>` +
-    sorted.map(o => `<option value="${o.c}">${flag(o.c)} ${esc(o.n)}</option>`).join("");
+  sel.innerHTML = `<option value="">国・地域を選んで追加…</option>` +
+    `<optgroup label="地域">${W.REGIONS.map(r => `<option value="${esc(r.key)}">${r.icon} ${esc(W.regionLabel(r.key))}</option>`).join("")}</optgroup>` +
+    `<optgroup label="国">${sorted.map(o => `<option value="${o.c}">${flag(o.c)} ${esc(o.n)}</option>`).join("")}</optgroup>`;
 
   sel.addEventListener("change", () => {
-    const c = sel.value;
-    if (c && !countries.includes(c)) { countries.push(c); saveCountries(); renderChips(); load(); }
+    const a = sel.value;
+    if (a && !areas.includes(a)) { areas.push(a); saveAreas(); renderChips(); load(); }
     sel.value = "";
   });
+
+  function renderChips() {
+    chips.innerHTML = areas.map(a =>
+      `<span class="chip">${esc(areaLabel(a))}<button aria-label="${esc(areaLabel(a))}を削除" data-c="${esc(a)}">×</button></span>`
+    ).join("") || `<span class="sub">国・地域が登録されていません</span>`;
+    chips.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      areas = areas.filter(x => x !== b.dataset.c);
+      saveAreas(); renderChips(); load();
+    }));
+    $("worldNote").hidden = !areas.includes("WORLD");
+  }
+
+  // ---------- 絞り込み操作 ----------
+  const refilter = () => { shownLimit = PAGE; render(); };
   $("reloadBtn").addEventListener("click", () => load());
-  qEl.addEventListener("input", () => render());
+  qEl.addEventListener("input", refilter);
   document.querySelectorAll("#regSeg button").forEach(b => b.addEventListener("click", () => {
     filter = b.dataset.f;
     document.querySelectorAll("#regSeg button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    render();
+    refilter();
   }));
 
   // ---------- 種目フィルター ----------
-  // evState: { 種目ID: "inc"（含む） | "exc"（含まない） }、evMode: "all" | "any"
-  const EV_KEY = "wcaFinder.eventFilter";
-  let evState = {}, evMode = "all";
+  // evState: { 種目ID: "inc"（含む） | "exc"（含まない） }
+  // evRounds: { 種目ID: "eq1" | "ge2" | "ge3" | "eq4" }（✓の種目のラウンド数条件）
+  // evMode: "all"（✓をすべて含む） | "any"（✓のどれかを含む）
+  const ROUND_OPTS = [
+    ["", "指定なし", ""], ["eq1", "1ラウンドのみ", "1R"], ["ge2", "2ラウンド以上", "2R以上"],
+    ["ge3", "3ラウンド以上", "3R以上"], ["eq4", "4ラウンド", "4R"]
+  ];
+  const roundShort = (cond) => (ROUND_OPTS.find(o => o[0] === cond) || ["", "", ""])[2];
+  const condOk = (n, cond) => cond === "eq1" ? n === 1 : cond === "ge2" ? n >= 2 : cond === "ge3" ? n >= 3 : cond === "eq4" ? n >= 4 : true;
+
+  let evState = {}, evRounds = {}, evMode = "all";
   try {
     const v = JSON.parse(localStorage.getItem(EV_KEY) || "null");
     if (v && typeof v === "object") {
       Object.entries(v.state || {}).forEach(([k, s]) => {
         if (W.FILTER_EVENTS.includes(k) && (s === "inc" || s === "exc")) evState[k] = s;
       });
+      Object.entries(v.rounds || {}).forEach(([k, r]) => {
+        if (evState[k] === "inc" && ROUND_OPTS.some(o => o[0] && o[0] === r)) evRounds[k] = r;
+      });
       if (v.mode === "any") evMode = "any";
     }
   } catch (e) {}
-  const saveEv = () => { try { localStorage.setItem(EV_KEY, JSON.stringify({ state: evState, mode: evMode })); } catch (e) {} };
-  const evOf = (s) => Object.keys(evState).filter(k => evState[k] === s);
+  const saveEv = () => { try { localStorage.setItem(EV_KEY, JSON.stringify({ state: evState, rounds: evRounds, mode: evMode })); } catch (e) {} };
+  const evOf = (s) => W.FILTER_EVENTS.filter(k => evState[k] === s);
+  const hasRoundCond = () => Object.keys(evRounds).length > 0;
 
+  // true: 一致 / false: 不一致 / null: ラウンド数の取得待ち
   function matchEvents(c) {
     const ids = c.event_ids || [];
-    const inc = evOf("inc"), exc = evOf("exc");
-    if (exc.some(e => ids.includes(e))) return false;
-    if (inc.length) {
-      return evMode === "all" ? inc.every(e => ids.includes(e)) : inc.some(e => ids.includes(e));
-    }
-    return true;
+    if (evOf("exc").some(e => ids.includes(e))) return false;
+    const inc = evOf("inc");
+    if (!inc.length) return true;
+    const res = inc.map(e => {
+      if (!ids.includes(e)) return false;
+      const cond = evRounds[e];
+      if (!cond) return true;
+      const r = roundsOf(c.id);
+      if (r === undefined) return roundsFailed.has(c.id) ? false : null;
+      return condOk(r[e] || 0, cond);
+    });
+    if (evMode === "all") return res.includes(false) ? false : res.includes(null) ? null : true;
+    return res.includes(true) ? true : res.includes(null) ? null : false;
   }
 
-  function renderEvChips() {
-    // 読み込んだ大会で各種目が何件あるか
+  function renderEvPanel() {
     const counts = {};
     competitions.forEach(c => (c.event_ids || []).forEach(e => { counts[e] = (counts[e] || 0) + 1; }));
     $("evChips").innerHTML = W.FILTER_EVENTS.map(e => {
@@ -91,12 +131,30 @@
       const e = b.dataset.e;
       const next = { "": "inc", inc: "exc", exc: "" }[evState[e] || ""];
       if (next) evState[e] = next; else delete evState[e];
-      saveEv(); render();
+      if (next !== "inc") delete evRounds[e];
+      saveEv(); renderEvPanel(); refilter();
     }));
 
-    const inc = evOf("inc"), exc = evOf("exc");
+    // ✓ の種目ごとのラウンド数
+    const inc = evOf("inc");
+    $("evRounds").innerHTML = inc.length
+      ? inc.map(e => `
+        <label class="rrow">
+          <span class="cubing-icon ${esc(W.iconClass(e))}"></span>
+          <span class="rname">${esc(W.EVENT_SHORT[e])}</span>
+          <select data-e="${e}" aria-label="${esc(W.eventName(e))}のラウンド数">
+            ${ROUND_OPTS.map(([v, t]) => `<option value="${v}"${(evRounds[e] || "") === v ? " selected" : ""}>${t}</option>`).join("")}
+          </select>
+        </label>`).join("")
+      : `<p class="rhint">種目を ✓（含む）にすると、その種目のラウンド数を指定できます。</p>`;
+    $("evRounds").querySelectorAll("select").forEach(s => s.addEventListener("change", () => {
+      if (s.value) evRounds[s.dataset.e] = s.value; else delete evRounds[s.dataset.e];
+      saveEv(); renderEvPanel(); refilter();
+    }));
+
     const parts = [];
-    if (inc.length) parts.push(`✓ ${inc.map(e => W.EVENT_SHORT[e]).join(evMode === "all" ? "＋" : "／")}`);
+    if (inc.length) parts.push(`✓ ${inc.map(e => W.EVENT_SHORT[e] + (evRounds[e] ? `(${roundShort(evRounds[e])})` : "")).join(evMode === "all" ? "＋" : "／")}`);
+    const exc = evOf("exc");
     if (exc.length) parts.push(`✕ ${exc.map(e => W.EVENT_SHORT[e]).join("・")}`);
     $("evSummary").textContent = parts.join("　") || "指定なし";
     $("evSummary").classList.toggle("active", parts.length > 0);
@@ -104,44 +162,133 @@
   }
 
   document.querySelectorAll("#evMode button").forEach(b => b.addEventListener("click", () => {
-    evMode = b.dataset.m; saveEv(); render();
+    evMode = b.dataset.m; saveEv(); renderEvPanel(); refilter();
   }));
-  $("evReset").addEventListener("click", () => { evState = {}; evMode = "all"; saveEv(); render(); });
+  $("evReset").addEventListener("click", () => { evState = {}; evRounds = {}; evMode = "all"; saveEv(); renderEvPanel(); refilter(); });
   if (Object.keys(evState).length) $("evPanel").open = true;
 
-  function renderChips() {
-    chips.innerHTML = countries.map(c =>
-      `<span class="chip">${flag(c)} ${esc(countryName(c))}<button aria-label="${esc(countryName(c))}を削除" data-c="${c}">×</button></span>`
-    ).join("") || `<span class="sub">国が登録されていません</span>`;
-    chips.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-      countries = countries.filter(x => x !== b.dataset.c);
-      saveCountries(); renderChips(); load();
-    }));
+  // ---------- ラウンド数（大会ごとに /competitions/{id}/events から取得） ----------
+  const ROUNDS_TTL = 12 * 3600 * 1000; // 12時間は保存した値を使う
+  let roundsCache = {};
+  try { roundsCache = JSON.parse(localStorage.getItem(ROUNDS_KEY) || "{}") || {}; } catch (e) {}
+  const roundsFailed = new Set();
+  const roundsOf = (id) => { const e = roundsCache[id]; return e && Date.now() - e.t < ROUNDS_TTL ? e.r : undefined; };
+
+  let saveTimer = 0;
+  function saveRoundsSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const now = Date.now();
+      Object.keys(roundsCache).forEach(k => { if (now - roundsCache[k].t >= ROUNDS_TTL) delete roundsCache[k]; });
+      try { localStorage.setItem(ROUNDS_KEY, JSON.stringify(roundsCache)); } catch (e) {}
+    }, 1000);
   }
 
-  // ---------- 取得 ----------
-  async function fetchCountry(iso, startStr) {
+  async function fetchRounds(id) {
+    const res = await fetch(`${API}/${encodeURIComponent(id)}/events`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const r = {};
+    (Array.isArray(data) ? data : []).forEach(ev => { if (ev && ev.id) r[ev.id] = (ev.rounds || []).length; });
+    return r;
+  }
+
+  const R_CONCURRENCY = 4;
+  let rQueue = [], rQueued = new Set(), rActive = 0;
+  function requestRounds(ids) {
+    ids.forEach(id => {
+      if (roundsOf(id) !== undefined || roundsFailed.has(id) || rQueued.has(id)) return;
+      rQueued.add(id); rQueue.push(id);
+    });
+    pumpRounds();
+  }
+  function pumpRounds() {
+    while (rActive < R_CONCURRENCY && rQueue.length) {
+      const id = rQueue.shift();
+      rActive++;
+      fetchRounds(id)
+        .then(r => { roundsCache[id] = { t: Date.now(), r }; saveRoundsSoon(); })
+        .catch(() => { roundsFailed.add(id); })
+        .finally(() => {
+          rActive--; rQueued.delete(id);
+          updateCardRounds(id);
+          if (hasRoundCond()) scheduleRender();
+          pumpRounds();
+        });
+    }
+  }
+  let renderTimer = 0;
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => render({ panel: false }), rQueue.length ? 700 : 50);
+  }
+
+  // カードの種目アイコンにラウンド数を表示
+  function updateCardRounds(id) {
+    const card = list.querySelector(`article[data-id="${CSS.escape(id)}"]`);
+    if (!card) return;
+    const r = roundsOf(id);
+    card.querySelectorAll(".ev[data-e]").forEach(el => {
+      const rc = el.querySelector(".rc");
+      const n = r ? r[el.dataset.e] : undefined;
+      if (rc) rc.textContent = n ? String(n) : "";
+      el.title = W.eventName(el.dataset.e) + (n ? `（${n}ラウンド）` : "");
+    });
+  }
+
+  // ---------- 大会一覧の取得 ----------
+  // 一覧APIの大会データは主催者情報などで大きいため、使う項目だけ残す
+  const KEEP = ["id", "name", "start_date", "end_date", "registration_open", "registration_close", "cancelled_at",
+    "venue", "venue_address", "city", "country_iso2", "event_ids", "url"];
+  const slim = (c) => { const o = {}; KEEP.forEach(k => { if (c[k] != null) o[k] = c[k]; }); return o; };
+
+  async function fetchPage(query, startStr, page) {
+    const url = `${API}?${query ? query + "&" : ""}start=${startStr}&per_page=100&page=${page}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(slim) : [];
+  }
+
+  // 全ページを取得（4ページずつ並行）
+  async function fetchAll(query, startStr, onProgress) {
     const all = [];
-    for (let page = 1; page <= 20; page++) {
-      const url = `${API}?country_iso2=${encodeURIComponent(iso)}&start=${startStr}` + (page > 1 ? `&page=${page}` : "");
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!res.ok) {
-        if (page === 1) throw new Error(`HTTP ${res.status}`);
-        break;
+    const BATCH = 4, MAX_PAGES = 80;
+    for (let p = 1; p <= MAX_PAGES; p += BATCH) {
+      const pages = [];
+      for (let i = p; i < p + BATCH && i <= MAX_PAGES; i++) pages.push(i);
+      const results = await Promise.allSettled(pages.map(pg => fetchPage(query, startStr, pg)));
+      let done = false;
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.status !== "fulfilled") {
+          if (pages[i] === 1) throw r.reason;
+          done = true; break; // 途中のページで失敗したら取得済み分で表示
+        }
+        all.push(...r.value);
+        if (r.value.length < 25) { done = true; break; } // 最終ページ
       }
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) break;
-      all.push(...data);
-      if (data.length < 25) break; // 最終ページ
+      onProgress && onProgress(all.length);
+      if (done) break;
     }
     return all;
+  }
+
+  function buildQueries() {
+    if (areas.includes("WORLD")) return [{ label: W.regionLabel("WORLD"), query: "" }];
+    return areas.map(a => W.isRegion(a)
+      ? { label: W.regionLabel(a), query: `continent=${encodeURIComponent(a)}` }
+      : { label: countryName(a), query: `country_iso2=${encodeURIComponent(a)}` });
   }
 
   let loadSeq = 0;
   async function load() {
     const seq = ++loadSeq;
     competitions = [];
-    if (!countries.length) { render(); return; }
+    shownLimit = PAGE;
+    roundsFailed.clear(); // 前回取得に失敗したラウンド数は再取得する
+    if (!areas.length) { render(); return; }
+    loading = true;
     setStatus("大会情報を読み込み中…");
     list.innerHTML = "";
     $("reloadBtn").classList.add("spin");
@@ -149,15 +296,21 @@
     const today = new Date();
     const since = new Date(today); since.setDate(since.getDate() - 7); // 開催中の複数日大会も拾う
     const todayStr = W.ymd(today);
+    const queries = buildQueries();
+    const progress = new Array(queries.length).fill(0);
 
-    const results = await Promise.allSettled(countries.map(c => fetchCountry(c, W.ymd(since))));
+    const results = await Promise.allSettled(queries.map((q, i) => fetchAll(q.query, W.ymd(since), n => {
+      progress[i] = n;
+      if (seq === loadSeq) setStatus(`大会情報を読み込み中… ${progress.reduce((a, b) => a + b, 0)} 件`);
+    })));
     if (seq !== loadSeq) return;
+    loading = false;
     $("reloadBtn").classList.remove("spin");
 
     const seen = new Set();
     const failed = [];
     results.forEach((r, i) => {
-      if (r.status !== "fulfilled") { failed.push(countryName(countries[i])); return; }
+      if (r.status !== "fulfilled") { failed.push(queries[i].label); return; }
       r.value.forEach(c => {
         if (seen.has(c.id)) return;
         seen.add(c.id);
@@ -171,11 +324,10 @@
     const t = new Date();
     $("updated").textContent = `${W.pad(t.getHours())}:${W.pad(t.getMinutes())} 更新`;
     lastLoad = t.getTime();
+    loadError = failed.length ? `${failed.join("、")} の取得に失敗しました。通信状況を確認して「更新」を押してください。` : "";
     render();
-    if (failed.length) {
-      setStatus(`${failed.join("、")} の取得に失敗しました。通信状況を確認して「更新」を押してください。`, true);
-    }
   }
+  let loadError = "";
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg;
@@ -194,43 +346,71 @@
     return { key: "closed", label: "申込締切" };
   }
 
-  function render() {
+  function render(opts = {}) {
+    if (opts.panel !== false) renderEvPanel();
+    releaseBlobUrls(); // 前回の描画で作ったカレンダー用リンクを破棄
     const now = new Date();
     const q = qEl.value.trim().toLowerCase();
-    renderEvChips();
-    releaseBlobUrls(); // 前回の描画で作ったカレンダー用リンクを破棄
-    const items = competitions.filter(c => {
-      if (filter !== "all" && regState(c, now).key !== filter) return false;
-      if (!matchEvents(c)) return false;
+
+    const items = [], pending = [];
+    let roundErrors = 0;
+    competitions.forEach(c => {
+      if (filter !== "all" && regState(c, now).key !== filter) return;
       if (q) {
         const hay = [c.name, c.city, W.venueName(c.venue), countryName(c.country_iso2)].join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
+        if (!hay.includes(q)) return;
       }
-      return true;
+      const m = matchEvents(c);
+      if (m === true) items.push(c);
+      else if (m === null) pending.push(c);
+      else if (hasRoundCond() && roundsFailed.has(c.id)) roundErrors++;
     });
+    if (pending.length) requestRounds(pending.map(c => c.id));
 
-    setStatus(countries.length
-      ? `${items.length} 件の大会${items.length !== competitions.length ? `（全 ${competitions.length} 件中）` : ""}`
-      : "");
+    if (loadError) setStatus(loadError, true);
+    else if (!areas.length) setStatus("");
+    else {
+      let msg = `${items.length} 件の大会${items.length !== competitions.length ? `（全 ${competitions.length} 件中）` : ""}`;
+      if (pending.length) msg += ` ・ ラウンド数を確認中…（残り ${pending.length} 件）`;
+      if (roundErrors) msg += ` ・ ${roundErrors} 件はラウンド数を取得できませんでした`;
+      setStatus(msg);
+    }
 
-    if (!countries.length) {
-      list.innerHTML = `<div class="empty">上のメニューから国を追加すると、その国で予定されている大会が表示されます。</div>`;
+    if (!areas.length) {
+      list.innerHTML = `<div class="empty">上のメニューから国・地域を追加すると、予定されている大会が表示されます。</div>`;
       return;
     }
     if (!items.length) {
-      list.innerHTML = `<div class="empty">${competitions.length ? "条件に合う大会がありません。" : "予定されている大会は見つかりませんでした。"}</div>`;
+      list.innerHTML = `<div class="empty">${pending.length ? "ラウンド数を確認しています…" : competitions.length ? "条件に合う大会がありません。" : "予定されている大会は見つかりませんでした。"}</div>`;
       return;
     }
 
-    list.innerHTML = items.map(c => {
-      const st = regState(c, now);
-      const open = c.registration_open ? W.fmtDateTime(new Date(c.registration_open)) : "未定";
-      const close = c.registration_close ? W.fmtDateTime(new Date(c.registration_close)) : "未定";
-      const url = W.compUrl(c);
-      const venue = W.venueName(c.venue);
-      const canRemindOpen = c.registration_open && new Date(c.registration_open) > now;
-      return `
-      <article class="card">
+    const shown = items.slice(0, shownLimit);
+    list.innerHTML = shown.map(c => cardHtml(c, now)).join("") +
+      (items.length > shown.length
+        ? `<button class="btn more" id="moreBtn">さらに表示（残り ${items.length - shown.length} 件）</button>` : "");
+
+    list.querySelectorAll("button[data-cal]").forEach(b => b.addEventListener("click", () => {
+      const c = competitions.find(x => x.id === b.dataset.id);
+      if (c) openInSafari(c, b.dataset.cal);
+    }));
+    const more = $("moreBtn");
+    if (more) more.addEventListener("click", () => { shownLimit += PAGE; render({ panel: false }); });
+
+    // 表示中の大会のラウンド数を取得してアイコンに表示
+    requestRounds(shown.map(c => c.id));
+  }
+
+  function cardHtml(c, now) {
+    const st = regState(c, now);
+    const open = c.registration_open ? W.fmtDateTime(new Date(c.registration_open)) : "未定";
+    const close = c.registration_close ? W.fmtDateTime(new Date(c.registration_close)) : "未定";
+    const url = W.compUrl(c);
+    const venue = W.venueName(c.venue);
+    const canRemindOpen = c.registration_open && new Date(c.registration_open) > now;
+    const r = roundsOf(c.id);
+    return `
+      <article class="card" data-id="${esc(c.id)}">
         <div class="card-head">
           <div class="where">${flag(c.country_iso2)} ${esc(countryName(c.country_iso2))}</div>
           <span class="badge ${st.key}">${st.label}</span>
@@ -243,8 +423,11 @@
           <dt>申込終了</dt><dd>${close} <span class="tz">${esc(W.TZ)}</span></dd>
           <dt>URL</dt><dd class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></dd>
         </dl>
-        <div class="events" aria-label="種目">
-          ${W.sortEvents(c.event_ids).map(e => `<span class="ev${evState[e] === "inc" ? " hit" : ""}" title="${esc(W.eventName(e))}" aria-label="${esc(W.eventName(e))}"><span class="cubing-icon ${esc(W.iconClass(e))}"></span></span>`).join("")}
+        <div class="events" aria-label="種目（数字はラウンド数）">
+          ${W.sortEvents(c.event_ids).map(e => {
+            const n = r ? r[e] : undefined;
+            return `<span class="ev${evState[e] === "inc" ? " hit" : ""}" data-e="${esc(e)}" title="${esc(W.eventName(e) + (n ? `（${n}ラウンド）` : ""))}"><span class="cubing-icon ${esc(W.iconClass(e))}"></span><span class="rc">${n ? n : ""}</span></span>`;
+          }).join("")}
         </div>
         <div class="actions">
           <a href="${esc(url)}" target="_blank" rel="noopener">🌐 WCAページ</a>
@@ -252,12 +435,6 @@
           ${canRemindOpen ? calControl(c, "reg", "⏰ 申込開始日時をカレンダーに追加") : ""}
         </div>
       </article>`;
-    }).join("");
-
-    list.querySelectorAll("button[data-cal]").forEach(b => b.addEventListener("click", () => {
-      const c = competitions.find(x => x.id === b.dataset.id);
-      if (c) openInSafari(c, b.dataset.cal);
-    }));
   }
 
   // ---------- カレンダー ----------
@@ -319,7 +496,7 @@
 
   // アプリに戻ってきたら自動更新（30分以上経過時）
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && Date.now() - lastLoad > 30 * 60000) load();
+    if (document.visibilityState === "visible" && !loading && Date.now() - lastLoad > 30 * 60000) load();
   });
 
   // ---------- Service Worker ----------

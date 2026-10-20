@@ -13,14 +13,35 @@
     "SC SD SE SG SI SK SL SM SN SO SR SS ST SV SY SZ TD TG TH TJ TL TM TN TO TR TT TV TW TZ UA UG US UY " +
     "UZ VA VC VE VN VU WS XK YE ZA ZM ZW").split(" ");
 
+  // 世界・大陸（WCA API の continent パラメーターの値をキーにする）
+  const REGIONS = [
+    { key: "WORLD", ja: "世界全体", en: "World", icon: "🌐" },
+    { key: "_Asia", ja: "アジア", en: "Asia", icon: "🌏" },
+    { key: "_Europe", ja: "ヨーロッパ", en: "Europe", icon: "🌍" },
+    { key: "_North America", ja: "北アメリカ", en: "North America", icon: "🌎" },
+    { key: "_South America", ja: "南アメリカ", en: "South America", icon: "🌎" },
+    { key: "_Africa", ja: "アフリカ", en: "Africa", icon: "🌍" },
+    { key: "_Oceania", ja: "オセアニア", en: "Oceania", icon: "🌏" }
+  ];
+  const regionOf = (key) => REGIONS.find(r => r.key === key);
+  const isRegion = (key) => !!regionOf(key);
+  const regionLabel = (key) => { const r = regionOf(key); return r ? `${r.ja} (${r.en})` : key; };
+
+  // 複数の国にまたがる大会（WCA独自コード）
+  const MULTI = { XA: "アジア", XE: "ヨーロッパ", XF: "アフリカ", XM: "アメリカ大陸", XN: "北アメリカ", XO: "オセアニア", XS: "南アメリカ", XW: "世界" };
+
   let regionNames = null;
   try { regionNames = new Intl.DisplayNames(["ja"], { type: "region" }); } catch (e) { /* 古いブラウザ */ }
   const countryName = (code) => {
     if (code === "XK") return "コソボ";
+    if (MULTI[code]) return `複数の国（${MULTI[code]}）`;
     try { return (regionNames && regionNames.of(code)) || code; } catch (e) { return code; }
   };
-  const flag = (code) => /^[A-Z]{2}$/.test(code || "")
-    ? String.fromCodePoint(...[...code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : "🏳️";
+  const flag = (code) => {
+    if (MULTI[code]) return "🌐";
+    return /^[A-Z]{2}$/.test(code || "")
+      ? String.fromCodePoint(...[...code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : "🏳️";
+  };
 
   // ---------- 種目（WCAの並び順） ----------
   const EVENTS = {
@@ -176,7 +197,7 @@
   }
 
   global.WCA = {
-    WCA_BASE, ISO2, countryName, flag,
+    WCA_BASE, ISO2, REGIONS, isRegion, regionOf, regionLabel, countryName, flag,
     EVENTS, EVENT_SHORT, FILTER_EVENTS, iconClass, sortEvents, eventName,
     pad, ymd, parseYmd, fmtDate, fmtRange, fmtDateTime, TZ,
     esc, venueName, compUrl, isIOS, isStandalone,

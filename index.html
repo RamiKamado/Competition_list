@@ -41,11 +41,12 @@
   </div>
 
   <section class="panel" aria-labelledby="h-countries">
-    <h2 id="h-countries">登録している国</h2>
+    <h2 id="h-countries">登録している国・地域</h2>
     <div class="row">
-      <select id="countrySelect" aria-label="国を選んで追加"></select>
+      <select id="countrySelect" aria-label="国・地域を選んで追加"></select>
     </div>
     <div class="chips" id="chips"></div>
+    <p class="note-small" id="worldNote" hidden>「世界全体」は大会数が多いため、読み込みに時間がかかることがあります。</p>
   </section>
 
   <section class="panel" aria-label="絞り込み">
@@ -65,6 +66,10 @@
       </summary>
       <p class="evhelp">タップするたびに <b class="inc-t">✓ 含む</b> → <b class="exc-t">✕ 含まない</b> → 指定なし と切り替わります。</p>
       <div class="evchips" id="evChips"></div>
+      <div class="evrounds">
+        <h3>ラウンド数</h3>
+        <div id="evRounds"></div>
+      </div>
       <div class="row evopts">
         <div class="seg" role="group" aria-label="含む種目の条件" id="evMode">
           <button data-m="all" aria-pressed="true">✓をすべて含む</button>
