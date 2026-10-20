@@ -1,6 +1,6 @@
 /* Service Worker: オフラインでも前回の内容を表示できるようにする。
    ファイルを更新したら VERSION の数字を上げてください。 */
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL_CACHE = `wca-finder-shell-${VERSION}`;
 const DATA_CACHE = "wca-finder-data";
 const CDN_CACHE = "wca-finder-cdn";

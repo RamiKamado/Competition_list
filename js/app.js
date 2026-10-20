@@ -167,11 +167,45 @@
   $("evReset").addEventListener("click", () => { evState = {}; evRounds = {}; evMode = "all"; saveEv(); renderEvPanel(); refilter(); });
   if (Object.keys(evState).length) $("evPanel").open = true;
 
+  // ---------- WCA API へのアクセス（利用制限に合わせて間隔を調整） ----------
+  // WCA API は 1つのIPアドレスにつき「1分あたり60回」まで。超えると 429 (Too Many Requests) で拒否される。
+  // 余裕を見てアプリ側で1分あたり50回までに抑え、それでも429が返ったら1分待ってやり直す。
+  const RATE_MAX = 50, RATE_WINDOW = 60 * 1000;
+  let reqTimes = [], pausedUntil = 0;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const isWaitingForLimit = () => Date.now() < pausedUntil ||
+    reqTimes.filter(t => Date.now() - t < RATE_WINDOW).length >= RATE_MAX;
+
+  async function waitSlot() {
+    for (;;) {
+      const now = Date.now();
+      if (now < pausedUntil) { await sleep(pausedUntil - now); continue; }
+      reqTimes = reqTimes.filter(t => now - t < RATE_WINDOW);
+      if (reqTimes.length < RATE_MAX) { reqTimes.push(now); return; }
+      await sleep(RATE_WINDOW - (now - reqTimes[0]) + 100);
+    }
+  }
+
+  async function apiGet(url) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await waitSlot();
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (res.status === 429) {          // 利用制限に達した → 1分待って再試行
+        pausedUntil = Date.now() + RATE_WINDOW;
+        onRateLimited();
+        continue;
+      }
+      if (!res.ok) { const e = new Error(`HTTP ${res.status}`); e.status = res.status; throw e; }
+      return res.json();
+    }
+    const e = new Error("HTTP 429"); e.status = 429; throw e;
+  }
+
   // ---------- ラウンド数（大会ごとに /competitions/{id}/events から取得） ----------
-  const ROUNDS_TTL = 12 * 3600 * 1000; // 12時間は保存した値を使う
+  const ROUNDS_TTL = 24 * 3600 * 1000; // 24時間は保存した値を使う
   let roundsCache = {};
   try { roundsCache = JSON.parse(localStorage.getItem(ROUNDS_KEY) || "{}") || {}; } catch (e) {}
-  const roundsFailed = new Set();
+  const roundsFailed = new Map(); // 大会ID → 失敗理由
   const roundsOf = (id) => { const e = roundsCache[id]; return e && Date.now() - e.t < ROUNDS_TTL ? e.r : undefined; };
 
   let saveTimer = 0;
@@ -185,30 +219,37 @@
   }
 
   async function fetchRounds(id) {
-    const res = await fetch(`${API}/${encodeURIComponent(id)}/events`, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = await apiGet(`${API}/${encodeURIComponent(id)}/events`);
     const r = {};
     (Array.isArray(data) ? data : []).forEach(ev => { if (ev && ev.id) r[ev.id] = (ev.rounds || []).length; });
     return r;
   }
 
-  const R_CONCURRENCY = 4;
-  let rQueue = [], rQueued = new Set(), rActive = 0;
-  function requestRounds(ids) {
+  // 取得待ちの列。high: ラウンド数での絞り込みに必要な大会、low: 画面に見えているカードの表示用
+  const R_CONCURRENCY = 2;
+  let rHigh = [], rLow = [], rQueued = new Set(), rActive = 0;
+  function requestRounds(ids, priority = "high") {
     ids.forEach(id => {
-      if (roundsOf(id) !== undefined || roundsFailed.has(id) || rQueued.has(id)) return;
-      rQueued.add(id); rQueue.push(id);
+      if (roundsOf(id) !== undefined || roundsFailed.has(id)) return;
+      if (rQueued.has(id)) {
+        if (priority === "high" && rLow.includes(id)) { rLow = rLow.filter(x => x !== id); rHigh.push(id); }
+        return;
+      }
+      rQueued.add(id);
+      (priority === "high" ? rHigh : rLow).push(id);
     });
     pumpRounds();
   }
   function pumpRounds() {
-    while (rActive < R_CONCURRENCY && rQueue.length) {
-      const id = rQueue.shift();
+    while (rActive < R_CONCURRENCY && (rHigh.length || rLow.length)) {
+      const id = rHigh.length ? rHigh.shift() : rLow.shift();
       rActive++;
       fetchRounds(id)
         .then(r => { roundsCache[id] = { t: Date.now(), r }; saveRoundsSoon(); })
-        .catch(() => { roundsFailed.add(id); })
+        .catch(e => {
+          if (e.status === 429) return;        // 制限中: 失敗扱いにせず、あとで再取得
+          roundsFailed.set(id, e.status === 404 ? "notfound" : e.status ? "server" : "network");
+        })
         .finally(() => {
           rActive--; rQueued.delete(id);
           updateCardRounds(id);
@@ -217,11 +258,21 @@
         });
     }
   }
+  function onRateLimited() { if (hasRoundCond()) scheduleRender(); }
+
   let renderTimer = 0;
   function scheduleRender() {
     clearTimeout(renderTimer);
-    renderTimer = setTimeout(() => render({ panel: false }), rQueue.length ? 700 : 50);
+    renderTimer = setTimeout(() => render({ panel: false }), rHigh.length ? 700 : 50);
   }
+
+  // 画面に見えているカードだけラウンド数を取得（アクセス回数を節約）
+  const cardObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver(entries => {
+        const ids = entries.filter(en => en.isIntersecting).map(en => en.target.dataset.id);
+        if (ids.length) requestRounds(ids, "low");
+      }, { rootMargin: "200px 0px" })
+    : null;
 
   // カードの種目アイコンにラウンド数を表示
   function updateCardRounds(id) {
@@ -237,39 +288,24 @@
   }
 
   // ---------- 大会一覧の取得 ----------
-  // 一覧APIの大会データは主催者情報などで大きいため、使う項目だけ残す
+  // 軽量な competition_index を使い、1回で最大1000件まとめて取得（中止大会は除外）
+  const INDEX_API = `${W.WCA_BASE}/api/v0/competition_index`;
+  const PER_PAGE = 1000;
   const KEEP = ["id", "name", "start_date", "end_date", "registration_open", "registration_close", "cancelled_at",
     "venue", "venue_address", "city", "country_iso2", "event_ids", "url"];
   const slim = (c) => { const o = {}; KEEP.forEach(k => { if (c[k] != null) o[k] = c[k]; }); return o; };
 
-  async function fetchPage(query, startStr, page) {
-    const url = `${API}?${query ? query + "&" : ""}start=${startStr}&per_page=100&page=${page}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return Array.isArray(data) ? data.map(slim) : [];
-  }
-
-  // 全ページを取得（4ページずつ並行）
   async function fetchAll(query, startStr, onProgress) {
     const all = [];
-    const BATCH = 4, MAX_PAGES = 80;
-    for (let p = 1; p <= MAX_PAGES; p += BATCH) {
-      const pages = [];
-      for (let i = p; i < p + BATCH && i <= MAX_PAGES; i++) pages.push(i);
-      const results = await Promise.allSettled(pages.map(pg => fetchPage(query, startStr, pg)));
-      let done = false;
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        if (r.status !== "fulfilled") {
-          if (pages[i] === 1) throw r.reason;
-          done = true; break; // 途中のページで失敗したら取得済み分で表示
-        }
-        all.push(...r.value);
-        if (r.value.length < 25) { done = true; break; } // 最終ページ
-      }
+    for (let page = 1; page <= 10; page++) {
+      const url = `${INDEX_API}?${query ? query + "&" : ""}start=${startStr}&include_cancelled=false&per_page=${PER_PAGE}&page=${page}`;
+      let data;
+      try { data = await apiGet(url); }
+      catch (e) { if (page === 1) throw e; break; } // 2ページ目以降の失敗は取得済み分で表示
+      if (!Array.isArray(data) || !data.length) break;
+      all.push(...data.map(slim));
       onProgress && onProgress(all.length);
-      if (done) break;
+      if (data.length < PER_PAGE) break; // 最終ページ
     }
     return all;
   }
@@ -371,8 +407,12 @@
     else if (!areas.length) setStatus("");
     else {
       let msg = `${items.length} 件の大会${items.length !== competitions.length ? `（全 ${competitions.length} 件中）` : ""}`;
-      if (pending.length) msg += ` ・ ラウンド数を確認中…（残り ${pending.length} 件）`;
-      if (roundErrors) msg += ` ・ ${roundErrors} 件はラウンド数を取得できませんでした`;
+      if (pending.length) {
+        msg += isWaitingForLimit()
+          ? ` ・ WCAの利用制限（1分あたり60回）のため待機中…（ラウンド数の確認 残り ${pending.length} 件）`
+          : ` ・ ラウンド数を確認中…（残り ${pending.length} 件）`;
+      }
+      if (roundErrors) msg += ` ・ ${roundErrors} 件はラウンド数を取得できませんでした（${failReasonText()}）`;
       setStatus(msg);
     }
 
@@ -397,8 +437,22 @@
     const more = $("moreBtn");
     if (more) more.addEventListener("click", () => { shownLimit += PAGE; render({ panel: false }); });
 
-    // 表示中の大会のラウンド数を取得してアイコンに表示
-    requestRounds(shown.map(c => c.id));
+    // 画面に見えているカードのラウンド数を取得してアイコンに表示
+    if (cardObserver) {
+      cardObserver.disconnect();
+      list.querySelectorAll("article[data-id]").forEach(el => { if (roundsOf(el.dataset.id) === undefined) cardObserver.observe(el); });
+    } else {
+      requestRounds(shown.slice(0, 10).map(c => c.id), "low");
+    }
+  }
+
+  function failReasonText() {
+    const reasons = new Set(roundsFailed.values());
+    const t = [];
+    if (reasons.has("network")) t.push("通信エラー");
+    if (reasons.has("notfound")) t.push("大会情報が非公開");
+    if (reasons.has("server")) t.push("WCA側のエラー");
+    return (t.join("・") || "不明") + "。「更新」で再取得します";
   }
 
   function cardHtml(c, now) {
