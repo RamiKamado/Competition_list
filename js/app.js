@@ -67,6 +67,71 @@
     refilter();
   }));
 
+  // ---------- 開催日の期間 ----------
+  // preset があれば今日を基準に毎回計算（「3か月以内」は日が変わっても3か月先までになる）
+  const DATE_KEY = "wcaFinder.dateFilter";
+  let dateFilter = { preset: "", from: "", to: "" };
+  try {
+    const v = JSON.parse(localStorage.getItem(DATE_KEY) || "null");
+    if (v && typeof v === "object") dateFilter = { preset: v.preset || "", from: v.from || "", to: v.to || "" };
+  } catch (e) {}
+  const saveDate = () => { try { localStorage.setItem(DATE_KEY, JSON.stringify(dateFilter)); } catch (e) {} };
+
+  function presetRange(p) {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const y = t.getFullYear(), m = t.getMonth();
+    const plusMonths = (n) => { const d = new Date(t); d.setMonth(d.getMonth() + n); return d; };
+    switch (p) {
+      case "thisMonth": return [t, new Date(y, m + 1, 0)];
+      case "nextMonth": return [new Date(y, m + 1, 1), new Date(y, m + 2, 0)];
+      case "m3": return [t, plusMonths(3)];
+      case "m6": return [t, plusMonths(6)];
+      default: return null;
+    }
+  }
+  // 現在の期間 { from: "YYYY-MM-DD" | "", to: "YYYY-MM-DD" | "" }
+  function currentRange() {
+    let from = dateFilter.from, to = dateFilter.to;
+    const r = presetRange(dateFilter.preset);
+    if (r) { from = W.ymd(r[0]); to = W.ymd(r[1]); }
+    if (from && to && from > to) [from, to] = [to, from]; // 逆に入力されたら入れ替え
+    return { from, to };
+  }
+  // 大会の開催期間（初日〜最終日）が指定期間と1日でも重なれば表示
+  function matchDate(c, range) {
+    const s = c.start_date, e = c.end_date || c.start_date;
+    if (range.from && e < range.from) return false;
+    if (range.to && s > range.to) return false;
+    return true;
+  }
+
+  function renderDateFilter() {
+    const r = currentRange();
+    $("dFrom").value = r.from; $("dTo").value = r.to;
+    $("dFrom").classList.toggle("set", !!r.from);
+    $("dTo").classList.toggle("set", !!r.to);
+    $("dFrom").min = W.ymd(new Date());
+    $("dTo").min = r.from || W.ymd(new Date());
+    const active = dateFilter.preset || (!r.from && !r.to ? "" : null);
+    document.querySelectorAll("#dPresets button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.p === active)));
+  }
+  document.querySelectorAll("#dPresets button").forEach(b => b.addEventListener("click", () => {
+    dateFilter = { preset: b.dataset.p, from: "", to: "" };
+    saveDate(); renderDateFilter(); refilter();
+  }));
+  ["dFrom", "dTo"].forEach(id => $(id).addEventListener("change", () => {
+    // 手入力したら「自分で指定」に切り替え（プリセットの値を引き継ぐ）
+    const r = currentRange();
+    dateFilter = { preset: "", from: r.from, to: r.to };
+    dateFilter[id === "dFrom" ? "from" : "to"] = $(id).value;
+    // 開始日が終了日より後になったら、もう一方を空にする（入れ替えると意図しない期間になるため）
+    if (dateFilter.from && dateFilter.to && dateFilter.from > dateFilter.to) {
+      if (id === "dFrom") dateFilter.to = ""; else dateFilter.from = "";
+    }
+    saveDate(); renderDateFilter(); refilter();
+  }));
+  renderDateFilter();
+
   // ---------- 種目フィルター ----------
   // evState: { 種目ID: "inc"（含む） | "exc"（含まない） }
   // evRounds: { 種目ID: "eq1" | "ge2" | "ge3" | "eq4" }（✓の種目のラウンド数条件）
@@ -390,8 +455,10 @@
 
     const items = [], pending = [];
     let roundErrors = 0;
+    const range = currentRange();
     competitions.forEach(c => {
       if (filter !== "all" && regState(c, now).key !== filter) return;
+      if (!matchDate(c, range)) return;
       if (q) {
         const hay = [c.name, c.city, W.venueName(c.venue), countryName(c.country_iso2)].join(" ").toLowerCase();
         if (!hay.includes(q)) return;
