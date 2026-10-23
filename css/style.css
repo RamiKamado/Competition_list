@@ -158,6 +158,26 @@ footer a { color: inherit; }
 .rrow select { flex: 1 1 auto; min-height: 38px; padding: 6px 8px; }
 .rhint { color: var(--muted); font-size: 12px; margin: 0; }
 
+/* ---------- 開催日の期間 ---------- */
+.datefilter { margin-top: 12px; }
+.daterow { display: flex; align-items: center; gap: 6px; }
+.dlabel { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.dsep { flex: none; color: var(--muted); }
+.daterow input[type="date"] {
+  flex: 1 1 0; min-width: 0; min-height: 42px; padding: 6px 8px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); font: inherit; font-size: 16px; /* iOS の自動ズーム防止 */
+  -webkit-appearance: none; appearance: none;
+}
+.daterow input[type="date"]:invalid, .daterow input[type="date"]:not(:valid) { color: var(--muted); }
+.daterow input.set { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.presets button {
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  border-radius: 999px; padding: 4px 12px; min-height: 32px; font-size: 13px;
+}
+.presets button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+
 /* ---------- 種目フィルター ---------- */
 .evpanel { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
 .evpanel summary {
