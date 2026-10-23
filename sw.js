@@ -1,6 +1,6 @@
 /* Service Worker: オフラインでも前回の内容を表示できるようにする。
-   ファイルを更新したら VERSION の数字を上げてください。 */
-const VERSION = "v7";
+   ファイルを更新したら、VERSION と index.html / cal.html の「?v=数字」を同じ数字に上げてください。 */
+const VERSION = "v8";
 const SHELL_CACHE = `wca-finder-shell-${VERSION}`;
 const DATA_CACHE = "wca-finder-data";
 const CDN_CACHE = "wca-finder-cdn";
@@ -9,9 +9,9 @@ const SHELL = [
   "./",
   "./index.html",
   "./cal.html",
-  "./css/style.css",
-  "./js/common.js",
-  "./js/app.js",
+  "./css/style.css?v=8",
+  "./js/common.js?v=8",
+  "./js/app.js?v=8",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/apple-touch-icon.png"
@@ -35,7 +35,8 @@ self.addEventListener("activate", (event) => {
 async function networkFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    const res = await fetch(request);
+    // ブラウザのHTTPキャッシュ（GitHub Pages は10分間）を使わず、毎回サーバーに更新を確認する
+    const res = await fetch(request, { cache: "no-cache" });
     if (res && (res.ok || res.type === "opaque")) cache.put(request, res.clone());
     return res;
   } catch (e) {
