@@ -59,6 +59,22 @@
       </div>
     </div>
 
+    <div class="datefilter" role="group" aria-labelledby="dLabel">
+      <div class="dlabel" id="dLabel">開催日の期間</div>
+      <div class="daterow">
+        <input type="date" id="dFrom" aria-label="開催日（この日から）">
+        <span class="dsep">〜</span>
+        <input type="date" id="dTo" aria-label="開催日（この日まで）">
+      </div>
+      <div class="presets" id="dPresets">
+        <button data-p="">指定なし</button>
+        <button data-p="thisMonth">今月</button>
+        <button data-p="nextMonth">来月</button>
+        <button data-p="m3">3か月以内</button>
+        <button data-p="m6">半年以内</button>
+      </div>
+    </div>
+
     <details class="evpanel" id="evPanel">
       <summary>
         <span class="evtitle">種目で絞り込む</span>
